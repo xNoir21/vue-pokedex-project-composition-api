@@ -66,9 +66,7 @@ const getPkmn = (value) => {
       pkmnData.value = result;
     })
     .catch((error) => {
-      errorRequest.value.errorMessage = error.message;
-      errorRequest.value.errorTitle = error.response.data;
-      isModalVisible.value = true;
+      showErrorMessage(error);
     })
     .finally(() => {
       isLoading.value = false;
@@ -78,37 +76,42 @@ const getPkmn = (value) => {
 const getPkmnList = () => {
   isLoading.value = true;
   let url = `pokemon?offset=${endIndex.value}&limit=${pkmnDataListLimit}`;
+
   axiosInstance
     .get(url)
     .then((result) => {
+      let pkmnDataPromises = [];
       for (let i = 0; i < result.data.results.length; i++) {
         let pkmn = result.data.results[i];
-        var pkmnTempDataList = [];
-
-        axiosInstance.get(pkmn.url).then((pkmnData) => {
-          let pkmnList = {
-            name: pkmn.name,
-            iconUrl: pkmnData.data.sprites.other.showdown.front_default,
-            type: pkmnData.data.types,
-            id: pkmnData.data.id,
-          };
-
-          pkmnTempDataList.push(pkmnList);
-          if (pkmnTempDataList.length === pkmnDataListLimit) {
-            pkmnDataList.value = pkmnDataList.value.concat(
-              sortPkmnList(pkmnTempDataList)
-            );
-
-            endIndex.value += pkmnDataListLimit;
-            isLoading.value = false;
-          }
-        });
+        pkmnDataPromises.push(axiosInstance.get(pkmn.url));
       }
+      processPromisesPkmnData(pkmnDataPromises);
     })
     .catch((error) => {
-      errorRequest.value.errorMessage = error.message;
-      errorRequest.value.errorTitle = error.response.data;
-      isModalVisible.value = true;
+      showErrorMessage(error);
+    });
+};
+
+const processPromisesPkmnData = (pkmnDataPromises) => {
+  Promise.all(pkmnDataPromises)
+    .then((pkmnDataResultList) => {
+      let pkmnTempDataList = [];
+      pkmnDataResultList.forEach((pkmnDataListElement) => {
+        pkmnTempDataList.push({
+          name: pkmnDataListElement.data.name,
+          iconUrl:
+            pkmnDataListElement.data.sprites.other.showdown.front_default,
+          type: pkmnDataListElement.data.types,
+          id: pkmnDataListElement.data.id,
+        });
+      });
+      pkmnDataList.value = pkmnDataList.value.concat(
+        sortPkmnList(pkmnTempDataList)
+      );
+    })
+    .finally(() => {
+      endIndex.value += pkmnDataListLimit;
+      isLoading.value = false;
     });
 };
 
@@ -116,6 +119,12 @@ const sortPkmnList = (pkmnList) => {
   return pkmnList.sort((pkmnA, pkmnB) => {
     return pkmnA.id - pkmnB.id;
   });
+};
+
+const showErrorMessage = (error) => {
+  errorRequest.value.errorMessage = error.message;
+  errorRequest.value.errorTitle = error.response.data;
+  isModalVisible.value = true;
 };
 
 const closeModal = () => {
